@@ -1,0 +1,108 @@
+#!/usr/bin/ash
+
+run_hook() {
+    modprobe -a -q dm-crypt >/dev/null 2>&1
+    [ "${quiet}" = "y" ] && CSQUIET=">/dev/null"
+
+    sed -re 's;#.*$;;g' -e '/^[ 	]*$/ d' -i /etc/crypttab
+    
+    lineno=1
+    while true; do
+        # fetch the next line from crypttab
+        line="$(tail -n+$lineno /etc/crypttab | tail -1)"
+        [ -z "$line" ] && break
+        lineno=$(( $lineno + 1 ))
+        
+        # parse fields in the crypttab line
+        read mapped_name device_path key_spec options <<EOF
+$line
+EOF
+
+        IFS=: read key_file keyarg1 keyarg2 <<EOF
+$key_spec
+EOF
+        # handle case of no key file
+        if [ "$key_file" = "-" -o "$key_file" = "none" ]; then
+            key_file=
+        elif [ -c "${key_file}" ]; then
+            # key file is a character device
+            length=${keyarg1:-32}
+            dd if=$key_file of=/keyfile.bin bs=1 count=$length >/dev/null 2>&1
+            key_file=/keyfile.bin
+        elif [ -b "${key_file}" ]; then
+            echo "ERROR: Key files on block devices are not supported yet."
+            key_file=
+        elif [ -r "${key_file}" -a "${key_file%.gpg}" != "${key_file}" ]; then
+            # if the key file ends in ".gpg" then handle as encrypted with GPG
+            # pcscd is needed for smartcard communication
+            /usr/bin/pcscd --auto-exit
+            
+            # /.gnupg is where the scdaemon socket lives
+            test -d /.gnupg || mkdir -p /.gnupg
+            chmod -R go-rwx /.gnupg /etc/initcpio/gpg
+            
+            # test communication with card - this is also needed for decryption
+            # to work at all
+            /usr/bin/gpg --homedir "/etc/initcpio/gpg" --card-status >/dev/null 2>&1
+            
+            # now attempt to decrypt
+            if /usr/bin/gpg --homedir "/etc/initcpio/gpg" --decrypt -o "/keyfile.bin" "${key_file}"; then
+                # we got it!
+                key_file="/keyfile.bin"
+            else
+                # if decryption fails, still prompt for a passphrase
+                echo "Failed to decrypt key file with GPG."
+                echo "Falling back to passphrase."
+                key_file=
+            fi
+        elif [ -r "${key_file}" ]; then
+            cp "${key_file}" /keyfile.bin
+            key_file=/keyfile.bin
+        fi
+        
+        ## end key retrieval
+        ## start device setup
+
+        # parse options
+        luksoptions=""
+        for option in ${options//,/ }; do
+            case "$option" in
+                discard)
+                    luksoptions="$luksoptions --allow-discards"
+                    ;;
+                *)
+                    echo "Warning: ignoring unknown crypttab option: $option"
+            esac
+        done
+
+        # resolve block device
+        if resolved=$(resolve_device "${device_path}" "${rootdelay}"); then
+            if cryptsetup isLuks "${device_path}"; then
+                # LUKS devices
+                                
+                # open device
+                if [ -n "$key_file" ]; then
+                    if ! eval cryptsetup luksOpen --key-file="${key_file}" $luksoptions "${resolved}" "${mapped_name}"; then
+                        echo "WARNING: Failed to luksOpen crypto device ${device_path}"
+                    fi
+                    rm -f "$key_file"
+                else
+                    if ! eval cryptsetup luksOpen $luksoptions "${resolved}" "${mapped_name}"; then
+                        echo "WARNING: Failed to luksOpen crypto device ${device_path}"
+                    fi
+                fi
+            else
+                # non-LUKS
+                echo "ERROR: ${device_path} is not a LUKS volume."
+                echo "Plain dm-crypt is not supported by the scencrypt hook."
+            fi
+        else
+            echo "WARNING: Failed to resolve crypto device ${device_path}"
+        fi
+    done
+
+    rm -rf /etc/initcpio/gpg
+    killall gpg-agent scdaemon pcscd
+}
+
+# vim: set ft=sh ts=4 sw=4 et:
