@@ -1,9 +1,10 @@
 pkgname=initramfs-scencrypt
 pkgdesc="initramfs hook that adds PGP smartcard support for LUKS FDE"
 pkgver=1.0
-pkgrel=1
+pkgrel=2
 arch=(any)
 depends=(gnupg pcsclite libusb-compat)
+install=${pkgname}.install
 source=(scencrypt-hook
 		scencrypt-install
 		README.md)
