@@ -12,13 +12,14 @@ build() {
         add_all_modules '/crypto/'
     fi
 
-    if [ -d /etc/initcpio/gpg ]; then
-        rm -rf /etc/initcpio/gpg
+    if [ -d $BUILDROOT/etc/initcpio/gpg ]; then
+        echo "WARNING! /etc/initcpio/gpg exists in initramfs buildroot. Huh?"
+        rm -rf "$BUILDROOT/etc/initcpio/gpg"
     fi
 
-    mkdir -p /etc/initcpio/gpg
-    chmod 0700 /etc/initcpio/gpg
-    echo "pinentry-program /usr/bin/pinentry-tty" > /etc/initcpio/gpg/gpg-agent.conf
+    mkdir -p $BUILDROOT/etc/initcpio/gpg
+    chmod 0700 $BUILDROOT/etc/initcpio/gpg
+    echo "pinentry-program /usr/bin/pinentry-tty" > $BUILDROOT/etc/initcpio/gpg/gpg-agent.conf
 
     add_binary "cryptsetup"
     add_binary "dmsetup"
@@ -27,7 +28,6 @@ build() {
     add_binary "pinentry-tty"
     add_binary "pcscd"
     add_binary "/usr/lib/gnupg/scdaemon"
-    add_file "/etc/initcpio/gpg/gpg-agent.conf"
     add_file "/usr/lib/udev/rules.d/10-dm.rules"
     add_file "/usr/lib/udev/rules.d/13-dm-disk.rules"
     add_file "/usr/lib/udev/rules.d/95-dm-notify.rules"
@@ -41,34 +41,23 @@ build() {
             add_file "$f"
             keyid=($(file $f | egrep -o '[A-F0-9]{8}' | sed -re 's;([0-9A-F]{2});\1 ;g'))
             keyid=${keyid[3]}${keyid[2]}${keyid[1]}${keyid[0]}${keyid[7]}${keyid[6]}${keyid[5]}${keyid[4]}
-            gpg --homedir /root/.gnupg --export-secret-keys 0x${keyid} | gpg --homedir /etc/initcpio/gpg --import
+            gpg --homedir /root/.gnupg --export-secret-keys 0x${keyid} | gpg --homedir "$BUILDROOT/etc/initcpio/gpg" --import
         fi
     done
     
-    add_file "/etc/initcpio/gpg/pubring.kbx"
-    #for f in /root/.gnupg/private-keys-v1.d/*.key; do
-    #    add_file "$f" "/etc/initcpio/gpg/${f#/root/.gnupg/}"
-    #done
-
     add_runscript
 }
 
 help() {
     cat <<HELPEOF
-This hook allows for an encrypted root device. Users should specify the device
-to be unlocked using 'cryptdevice=device:dmname' on the kernel command line,
-where 'device' is the path to the raw device, and 'dmname' is the name given to
-the device after unlocking, and will be available as /dev/mapper/dmname.
+This hook adds support for the use of smartcards conforming to the OpenPGP
+smartcard standard to Arch's initramfs. Encrypted objects listed in
+/etc/crypttab will be decrypted with GnuPG during the initramfs stage if the
+keyfile path ends in ".gpg". If GnuPG fails to decrypt the key file, the hook
+will prompt for the passphrase instead.
 
-For unlocking via keyfile, 'cryptkey=device:fstype:path' should be specified on
-the kernel cmdline, where 'device' represents the raw block device where the key
-exists, 'fstype' is the filesystem type of 'device' (or auto), and 'path' is
-the absolute path of the keyfile within the device.
+Note that non-LUKS disks are unsupported at this time.
 
-Without specifying a keyfile, you will be prompted for the password at runtime.
-This means you must have a keyboard available to input it, and you may need
-the keymap hook as well to ensure that the keyboard is using the layout you
-expect.
 HELPEOF
 }
 
