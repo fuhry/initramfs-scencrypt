@@ -27,6 +27,7 @@ Use this hook at your own risk. It's highly recommended to have a backup key som
 1. Edit `/etc/crypttab` to include your encrypted device. The line will look somewhat like:
    `arch_crypt        /dev/your_luks_device               /home/you/disk.bin.gpg         discard`
 1. Edit `/etc/mkinitcpio.conf` and replace the `encrypt` hook with `scencrypt`. Do not leave both `encrypt` and `scencrypt` enabled.
+1. Make sure `root` has a GPG keychain with your public key (e.g. `gpg --export -a 0x13C7C0BA66FB8DC7 > ~/pub.gpg`, `sudo su`, `gpg --import /home/<user>/pub.gpg`
 1. Run `mkinitcpio -p linux`. If there are no errors, reboot with your smart card plugged in to find out if it works.
 1. (Optional) `sudo cryptSetup luksRemoveKey /dev/your_luks_device` and type the passphrase you added when you were installing Arch. This will remove the old passphrase so that only your GPG-encrypted key file can unseal the disk.
 
