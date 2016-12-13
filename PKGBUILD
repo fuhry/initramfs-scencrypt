@@ -24,6 +24,6 @@ package() {
 	cp "${srcdir}/README.md" "${pkgdir}/usr/share/doc/${pkgname}/"
 }
 
-md5sums=('159bfe688d4e2784c9c9882bb33c6fac'
-         'b26cb77dcb304d5af63b9d241a497f5e'
-         '6c68b216a5346c9e936a06cd4b839f7f')
+md5sums=('SKIP'
+         'SKIP'
+         'SKIP')
