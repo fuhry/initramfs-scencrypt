@@ -42,7 +42,7 @@ build() {
         if [ "${f:0:1}" = "/" -a -f "$f" ]; then
             add_file "$f"
             # Determine the keyid used to encrypt this keyfile
-            keyid=$(gpg --list-packets --list-only $f 2>&1 | egrep -o 'ID [0-9A-F]{16}' | awk '{print $2;}')
+            keyid=$(gpg --list-packets --list-only $f 2>&1 | egrep -o '[0-9A-F]{16}' | awk '{print $1;}')
 
             # If we got a keyid, export that key. Recent versions of GPG will fail to
             # export secret key stubs, so if we don't get any output, export just the
