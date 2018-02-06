@@ -26,7 +26,7 @@ build() {
     add_binary "gpg"
     add_binary "gpg-agent"
     add_binary "pinentry-tty"
-    add_binary "pcscd"
+    add_binary "gpg-connect-agent"
     add_binary "/usr/lib/gnupg/scdaemon"
     add_file "/usr/lib/udev/rules.d/10-dm.rules"
     add_file "/usr/lib/udev/rules.d/13-dm-disk.rules"
@@ -42,16 +42,20 @@ build() {
         if [ "${f:0:1}" = "/" -a -f "$f" ]; then
             add_file "$f"
             # Determine the keyid used to encrypt this keyfile
-            keyid=$(gpg --list-packets --list-only $f 2>&1 | egrep -o 'ID [0-9A-F]{16}' | awk '{print $2;}')
+            keyid=$(gpg --list-packets --list-only $f 2>&1 | egrep -o '(ID|keyid) [0-9A-F]{16}' | awk '{print $2;}')
 
             # If we got a keyid, export that key. Recent versions of GPG will fail to
             # export secret key stubs, so if we don't get any output, export just the
             # public key. Note that this means decryption will fail if you add only the
             # public key to root's keyring.
             if [ -n "$keyid" ]; then
-                (gpg --homedir /root/.gnupg --export-secret-keys -a 0x${keyid} 2>/dev/null | egrep '.+' || \
-                 gpg --homedir /root/.gnupg --export -a 0x${keyid}) | \
-                   gpg --homedir "$BUILDROOT/etc/initcpio/gpg" --import
+                keyfile=/tmp/$keyid.asc
+                gpg --homedir /root/.gnupg --export-options export-minimal --export-secret-keys -a 0x${keyid} 2>/dev/null > $keyfile
+                if ! egrep -q '.*' $keyfile; then
+                    gpg --homedir /root/.gnupg --export-options export-minimal --export -a 0x${keyid} > $keyfile
+                fi
+                gpg --homedir "$BUILDROOT/etc/initcpio/gpg" --import $keyfile
+                rm -f $keyfile
             fi
         fi
     done
