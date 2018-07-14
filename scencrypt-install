@@ -49,10 +49,11 @@ build() {
             # public key. Note that this means decryption will fail if you add only the
             # public key to root's keyring.
             if [ -n "$keyid" ]; then
-                keyfile=/tmp/$keyid.asc
-                gpg --homedir /root/.gnupg --export-options export-minimal --export-secret-keys -a 0x${keyid} 2>/dev/null > $keyfile
+                keyid2=$(cut -d' ' -f1 <<<$keyid | head -n1)
+                keyfile=/tmp/$keyid2.asc
+                gpg --homedir /root/.gnupg --export-options export-minimal --export-secret-keys -a ${keyid2} > $keyfile
                 if ! egrep -q '.*' $keyfile; then
-                    gpg --homedir /root/.gnupg --export-options export-minimal --export -a 0x${keyid} > $keyfile
+                    gpg --homedir /root/.gnupg --export-options export-minimal --export -a 0x${keyid2} > $keyfile
                 fi
                 gpg --homedir "$BUILDROOT/etc/initcpio/gpg" --import $keyfile
                 rm -f $keyfile
