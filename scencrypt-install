@@ -19,7 +19,7 @@ build() {
 
     mkdir -p $BUILDROOT/etc/initcpio/gpg
     chmod 0700 $BUILDROOT/etc/initcpio/gpg
-    echo "pinentry-program /usr/bin/pinentry-tty" > $BUILDROOT/etc/initcpio/gpg/gpg-agent.conf
+    echo "pinentry-program /usr/bin/pinentry" > $BUILDROOT/etc/initcpio/gpg/gpg-agent.conf
 
     add_binary "cryptsetup"
     add_binary "dmsetup"
@@ -35,6 +35,8 @@ build() {
     
     add_file "/etc/crypttab"
 
+    ln -s "pinentry-tty" "$BUILDROOT/usr/bin/pinentry"
+
     # Iterate over entries in /etc/crypttab looking for regular keyfiles
     sed -re 's;#.*$;;g' -e '/^[ \t]*$/ d' /etc/crypttab | awk '{print $3;}' | \
     while read f; do
@@ -42,7 +44,7 @@ build() {
         if [ "${f:0:1}" = "/" -a -f "$f" ]; then
             add_file "$f"
             # Determine the keyid used to encrypt this keyfile
-            keyid=$(gpg --list-packets --list-only $f 2>&1 | egrep -o '(ID|keyid) [0-9A-F]{16}' | awk '{print $2;}')
+            keyid=$(gpg -q --list-packets --list-only $f 2>&1 | egrep -o '(ID|keyid) [0-9A-F]{16}' | awk '{print $2;}' | tail -1)
 
             # If we got a keyid, export that key. Recent versions of GPG will fail to
             # export secret key stubs, so if we don't get any output, export just the
