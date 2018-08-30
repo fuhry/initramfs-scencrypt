@@ -44,14 +44,8 @@ run_hook() {
     [ "${quiet}" = "y" ] && CSQUIET=">/dev/null"
 
     sed -re 's;#.*$;;g' -e '/^[ 	]*$/ d' -i /etc/crypttab
-    
-    lineno=1
-    while true; do
-        # fetch the next line from crypttab
-        line="$(tail -n+$lineno /etc/crypttab | tail -1)"
-        [ -z "$line" ] && break
-        lineno=$(( $lineno + 1 ))
-        
+
+    while read line; do
         # parse fields in the crypttab line
         read mapped_name device_path key_spec options <<EOF
 $line
@@ -75,26 +69,37 @@ EOF
             # /.gnupg is where the scdaemon socket lives
             test -d /.gnupg || mkdir -p /.gnupg
             chmod -R go-rwx /.gnupg /etc/initcpio/gpg
-            
-            # test communication with card - this is also needed for decryption
-            # to work at all
-            retry 60 "Waiting for the smartcard to be inserted..." card_status
-            
-            # now attempt to decrypt
-            if decrypt_file "${key_file}" "/keyfile.bin"; then
-                # we got it!
-                key_file="/keyfile.bin"
+
+            # store the key at a known path. this allows the same key to be used
+            # for multiple disks and only have to decrypt once.
+            key_dest_path=/etc/initcpio/gpg/key_${key_file//\//S}
+
+            # only attempt decryption if the keypath doesn't exist.
+            if [ -r "${key_dest_path}" ]; then
+                key_file="${key_dest_path}"
             else
-                # if decryption fails, still prompt for a passphrase
-                echo "Failed to decrypt key file with GPG."
-                echo "Falling back to passphrase."
-                key_file=
+                # we need to decrypt.
+
+                # test communication with card - this is also needed for decryption
+                # to work at all
+                retry 60 "Waiting for the smartcard to be inserted..." card_status
+
+                # now attempt to decrypt
+                if decrypt_file "${key_file}" "${key_dest_path}"; then
+                    # we got it!
+                    key_file="${key_dest_path}"
+                else
+                    # if decryption fails, still prompt for a passphrase
+                    echo "Failed to decrypt key file with GPG."
+                    echo "Falling back to passphrase."
+                    key_file=
+                fi
             fi
         elif [ -r "${key_file}" ]; then
             cp "${key_file}" /keyfile.bin
             key_file=/keyfile.bin
         fi
-        
+
         ## end key retrieval
         ## start device setup
 
@@ -114,13 +119,12 @@ EOF
         if resolved=$(resolve_device "${device_path}" "${rootdelay}"); then
             if cryptsetup isLuks "${device_path}"; then
                 # LUKS devices
-                                
+
                 # open device
                 if [ -n "$key_file" ]; then
                     if ! eval cryptsetup luksOpen --key-file="${key_file}" $luksoptions "${resolved}" "${mapped_name}"; then
                         echo "WARNING: Failed to luksOpen crypto device ${device_path}"
                     fi
-                    rm -f "$key_file"
                 else
                     if ! eval cryptsetup luksOpen $luksoptions "${resolved}" "${mapped_name}"; then
                         echo "WARNING: Failed to luksOpen crypto device ${device_path}"
@@ -134,7 +138,7 @@ EOF
         else
             echo "WARNING: Failed to resolve crypto device ${device_path}"
         fi
-    done
+    done < /etc/crypttab
 
     rm -rf /etc/initcpio/gpg
 }
