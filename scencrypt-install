@@ -18,6 +18,8 @@ build() {
     fi
 
     mkdir -p $BUILDROOT/etc/initcpio/gpg
+    touch $BUILDROOT/etc/crypttab
+    chmod 600 $BUILDROOT/etc/crypttab
     chmod 0700 $BUILDROOT/etc/initcpio/gpg
     echo "pinentry-program /usr/bin/pinentry" > $BUILDROOT/etc/initcpio/gpg/gpg-agent.conf
 
@@ -33,13 +35,16 @@ build() {
     add_file "/usr/lib/udev/rules.d/95-dm-notify.rules"
     add_file "/usr/lib/initcpio/udev/11-dm-initramfs.rules" "/usr/lib/udev/rules.d/11-dm-initramfs.rules"
     
-    add_file "/etc/crypttab"
+    # add_file "/etc/crypttab"
 
     ln -s "pinentry-tty" "$BUILDROOT/usr/bin/pinentry"
 
     # Iterate over entries in /etc/crypttab looking for regular keyfiles
-    sed -re 's;#.*$;;g' -e '/^[ \t]*$/ d' /etc/crypttab | awk '{print $3;}' | \
-    while read f; do
+    sed -re 's;#.*$;;g' -e '/^[ \t]*$/ d' /etc/crypttab | while read -a ctline; do
+        [[ "${ctline[@]:3}" == *"x-scencrypt.skip"* ]] && continue
+        ( IFS=$'\t'; echo "${ctline[*]}" ) >> $BUILDROOT/etc/crypttab
+        f="${ctline[2]}"
+
         # Path must begin with a slash and must be a regular file
         if [ "${f:0:1}" = "/" -a -f "$f" ]; then
             add_file "$f"
