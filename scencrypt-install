@@ -42,7 +42,6 @@ build() {
     while read f; do
         # Path must begin with a slash and must be a regular file
         if [ "${f:0:1}" = "/" -a -f "$f" ]; then
-            add_file "$f"
             # Determine the keyid used to encrypt this keyfile
             keyid=$(gpg -q --list-packets --list-only $f 2>&1 | egrep -o '(ID|keyid) [0-9A-F]{16}' | awk '{print $2;}' | tail -1)
 
@@ -51,6 +50,7 @@ build() {
             # public key. Note that this means decryption will fail if you add only the
             # public key to root's keyring.
             if [ -n "$keyid" ]; then
+                add_file "$f"
                 keyfile=/tmp/$keyid.asc
                 gpg --homedir /root/.gnupg --export-options export-minimal --export-secret-keys -a 0x${keyid} 2>/dev/null > $keyfile
                 if ! egrep -q '.*' $keyfile; then
