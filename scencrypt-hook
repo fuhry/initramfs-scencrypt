@@ -11,8 +11,6 @@ decrypt_file() {
     /usr/bin/gpg --homedir "/etc/initcpio/gpg" -o "${output}" --decrypt "${input}" \
         0</dev/console 1>/dev/console 2>/dev/console
     local result=$?
-
-    /usr/bin/gpg-connect-agent --homedir "/etc/initcpio/gpg" KILLAGENT /bye >/dev/null 2>&1
 }
 
 retry() {
@@ -140,6 +138,7 @@ EOF
         fi
     done < /etc/crypttab
 
+    /usr/bin/gpg-connect-agent --homedir "/etc/initcpio/gpg" KILLAGENT /bye >/dev/null 2>&1
     rm -rf /etc/initcpio/gpg
 }
 
