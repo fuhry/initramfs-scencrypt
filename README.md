@@ -37,4 +37,11 @@ The hook works by copying your encrypted key file to the initramfs, decrypting i
 
 Behind the scenes, `gpg` starts `scdaemon`, which talks to `pcscd` and `pinentry-tty` to get your PIN and pass it to the card along with the payload for decryption. The private key itself is held securely on the smartcard - it cannot be released even with the PIN on hand. But the decryption is quick because the payload is small. Once the disk is mounted, the smartcard can safely be removed from the system - the result of the decryption is merely a "user key" that LUKS uses to decrypt the volume's master key. There is an excellent [white paper](http://clemens.endorphin.org/nmihde/nmihde-A4-ds.pdf) written by one of the original LUKS authors detailing LUKS's extensive anti-forensic hardening.
 
+# How to contribute
+
+1. Fork the repository
+1. If you're fixing a bug, create an issue for it. New features/enhancements don't need an issue created.
+1. Work in a branch ideally named after the issue you're working on, if applicable
+1. When ready for review, open a pull request.
+1. If you're a first time contributor, add your name, PGP key ID and GitHub username to [CONTIRBUTORS.md](CONTRIBUTORS.md). **If you have not done this, your pull request will not be accepted.**
 
