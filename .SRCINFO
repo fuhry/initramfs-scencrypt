@@ -1,6 +1,6 @@
 pkgbase = initramfs-scencrypt
 	pkgdesc = initramfs hook that adds PGP smartcard support for LUKS FDE
-	pkgver = 1.7
+	pkgver = 1.8
 	pkgrel = 1
 	install = initramfs-scencrypt.install
 	arch = any
