@@ -43,7 +43,8 @@ build() {
         # Path must begin with a slash and must be a regular file
         if [ "${f:0:1}" = "/" -a -f "$f" ]; then
             # file must end in .gpg
-            if [ "${f##*.}" = "gpg" ] ; then
+            extension="${f##*.}"
+            if [[ "${extension}" =~ ^(gpg|pgp|asc)$ ]] ; then
                 # add file line to crypttab
                 grep $f /etc/crypttab >> "$BUILDROOT/etc/crypttab"
 
