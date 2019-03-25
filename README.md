@@ -43,5 +43,5 @@ Behind the scenes, `gpg` starts `scdaemon`, which talks to `pcscd` and `pinentry
 1. If you're fixing a bug, create an issue for it. New features/enhancements don't need an issue created.
 1. Work in a branch ideally named after the issue you're working on, if applicable
 1. When ready for review, open a pull request.
+1. Don't update version numbers - the maintainers will do this when new versions are released.
 1. If you're a first time contributor, add your name, PGP key ID and GitHub username to [CONTIRBUTORS.md](CONTRIBUTORS.md). **If you have not done this, your pull request will not be accepted.**
-
