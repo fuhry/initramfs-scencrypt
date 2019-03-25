@@ -2,6 +2,7 @@ pkgname=initramfs-scencrypt
 pkgdesc="initramfs hook that adds PGP smartcard support for LUKS FDE"
 pkgver=1.8
 pkgrel=1
+license=(MIT)
 arch=(any)
 depends=(gnupg)
 install=${pkgname}.install
