@@ -14,6 +14,34 @@ present and future, under the MIT license (SPDX "MIT", https://spdx.org/licenses
 
 ----
 
+Legal name: Dan Fuhry
+
+GitHub username: https://github.com/fuhry
+
+PGP key ID: 0xF4911EC47898A7550EDA7C6FDCD5C4E7C0B94A99
+
+License release:
+```
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA256
+
+I'm hereby licensing my contributions to github.com/fuhry/initramfs-scencrypt,
+present and future, under the MIT license (SPDX "MIT", https://spdx.org/licenses/MIT.html#licenseText)
+-----BEGIN PGP SIGNATURE-----
+
+iQEzBAEBCAAdFiEE9JEexHiYp1UO2nxv3NXE58C5SpkFAlyZBHoACgkQ3NXE58C5
+SpkdEwgAhO+IpFP1ePa4PUT7XEOmYpNFklsuALcwXe+iwumlwHBnUZ+u/cX/IL8p
+js+5Otjjb7EA9DuqpEFbo0h6uMEpw5mcaao7g0wXZei/zgmKxgnvmFEv2i71NaKf
+jUty4Jt3MQBCPXDlPfTZlceOHNNOcXUzAUJxF23DpjZy3WxwjFe++BKEtb7uXziE
+vVXGl4atMb5YJwD93AzIUgllxn3l8R87M2c6k/KbRxN+0H8hvcNLqT7fzJ8fAQNV
+AwhzEA/2q5l7lnwd2Zj6UGMIO6JIJ86FT+7cWzh9bkpkzOdoc8tKTKXyiW8dlzfD
+X6hiy2qk9xS5GfACHhX26mXP3YJa6Q==
+=xACU
+-----END PGP SIGNATURE-----
+```
+
+----
+
 Legal name: Alexander Schittler
 
 GitHub username: https://github.com/damongant
