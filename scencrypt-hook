@@ -43,9 +43,11 @@ run_hook() {
 
     sed -re 's;#.*$;;g' -e '/^[ 	]*$/ d' -i /etc/crypttab
 
-    while read line; do
+    IFS_BACKUP="$IFS"
+    IFS=$'\n'
+    for line in $(cat /etc/crypttab); do
         # parse fields in the crypttab line
-        read mapped_name device_path key_spec options <<EOF
+        IFS="$IFS_BACKUP" read mapped_name device_path key_spec options <<EOF
 $line
 EOF
 
@@ -136,7 +138,8 @@ EOF
         else
             echo "WARNING: Failed to resolve crypto device ${device_path}"
         fi
-    done < /etc/crypttab
+    done
+    IFS="$IFS_BACKUP"
 
     /usr/bin/gpg-connect-agent --homedir "/etc/initcpio/gpg" KILLAGENT /bye >/dev/null 2>&1
     rm -rf /etc/initcpio/gpg
