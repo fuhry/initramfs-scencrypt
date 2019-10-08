@@ -10,7 +10,7 @@ As is the case with all LUKS systems, anyone who gets root on your box after it'
 
 PGP smart cards have varying options for PIN limits and reset or self-destruct functionality - choose one that fits your needs.
 
-This hook has only been tested with the Yubikey NEO.
+This hook has only been tested with the YubiKey NEO.
 
 ## Disclaimer
 
@@ -36,6 +36,8 @@ Use this hook at your own risk. It's highly recommended to have a backup key som
 The hook works by copying your encrypted key file to the initramfs, decrypting it in memory, passing it to LUKS to unseal the disk, and then using `shred` to overwrite it in memory.
 
 Behind the scenes, `gpg` starts `scdaemon`, which talks to `pcscd` and `pinentry-tty` to get your PIN and pass it to the card along with the payload for decryption. The private key itself is held securely on the smartcard - it cannot be released even with the PIN on hand. But the decryption is quick because the payload is small. Once the disk is mounted, the smartcard can safely be removed from the system - the result of the decryption is merely a "user key" that LUKS uses to decrypt the volume's master key. There is an excellent [white paper](http://clemens.endorphin.org/nmihde/nmihde-A4-ds.pdf) written by one of the original LUKS authors detailing LUKS's extensive anti-forensic hardening.
+
+The hook will prefer `cryptkey=` kernel cmdline argument if present. It uses the same options as the stock `encrypt` hook, refer to the `cryptsetup` package for details. This allows you to use `kexec` without having to re-insert your YubiKey. For this to work you can kexec-load a `initrd` which contains the plain key file. For security reasons that initrd shall only reside in RAM. Have a look at [kexec-example.sh](kexec-example.sh).
 
 # How to contribute
 

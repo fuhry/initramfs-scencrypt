@@ -61,6 +61,34 @@ run_hook() {
     modprobe -a -q dm-crypt >/dev/null 2>&1
     [ "${quiet}" = "y" ] && CSQUIET=">/dev/null"
 
+    # Get plain key file if specified, example: cryptkey=/dev/sda:2048:4096, cryptkey=rootfs:/keyfile.bin
+    ckeyfile=
+    if [ -n "$cryptkey" ]; then
+        IFS=: read ckdev ckarg1 ckarg2 <<EOF
+$cryptkey
+EOF
+
+        if [ "$ckdev" = "rootfs" ]; then
+            ckeyfile=$ckarg1
+        elif resolved=$(resolve_device "${ckdev}" ${rootdelay}); then
+            case ${ckarg1} in
+                *[!0-9]*)
+                    # Use a file on the device
+                    # ckarg1 is not numeric: ckarg1=filesystem, ckarg2=path
+                    mkdir /ckey
+                    mount -r -t "$ckarg1" "$resolved" /ckey
+                    dd if="/ckey/$ckarg2" of="$ckeyfile" >/dev/null 2>&1
+                    umount /ckey
+                    ;;
+                *)
+                    # Read raw data from the block device
+                    # ckarg1 is numeric: ckarg1=offset, ckarg2=length
+                    dd if="$resolved" of="$ckeyfile" bs=1 skip="$ckarg1" count="$ckarg2" >/dev/null 2>&1
+                    ;;
+            esac
+        fi
+    fi
+
     sed -re 's;#.*$;;g' -e '/^[ 	]*$/ d' -i /etc/crypttab
 
     IFS_BACKUP="$IFS"
@@ -77,6 +105,10 @@ EOF
         # handle case of no key file
         if [ "$key_file" = "-" -o "$key_file" = "none" ]; then
             key_file=
+        elif [ -r "${ckeyfile}" ]; then
+            # plain key file via cmdline cryptkey=
+            echo "Using plain key file specified in cryptkey="
+            key_file="${ckeyfile}"
         elif [ -c "${key_file}" ]; then
             # key file is a character device
             length=${keyarg1:-32}
@@ -141,14 +173,18 @@ EOF
             if cryptsetup isLuks "${device_path}"; then
                 # LUKS devices
 
-                # open device
+                # open device with key file
                 if [ -n "$key_file" ]; then
                     if ! eval cryptsetup luksOpen --key-file="${key_file}" \
                         $luksoptions "${resolved}" "${mapped_name}"; then
                         echo "WARNING: Failed to luksOpen crypto device" \
                             ${device_path}
+                        key_file=
                     fi
-                else
+                fi
+
+                # open device with passphrase
+                if [ ! -n "$key_file" ]; then
                     if ! eval cryptsetup luksOpen $luksoptions "${resolved}" \
                         "${mapped_name}"; then
                         echo "WARNING: Failed to luksOpen crypto device" \
