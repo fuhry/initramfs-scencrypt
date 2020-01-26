@@ -74,6 +74,11 @@ build() {
         fi
     done
 
+    # Remove duplicate lines
+    uniq "$BUILDROOT/tmp/crypttab" "$BUILDROOT/etc/crypttab"
+    # Remove tmp dir
+    rm -rf "$BUILDROOT/tmp"
+
     add_runscript
 }
 
