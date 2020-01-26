@@ -10,7 +10,7 @@ decrypt_file() {
     local output="${2:--}"
     /usr/bin/gpg --homedir "/etc/initcpio/gpg" -o "${output}" --decrypt "${input}" \
         0</dev/console 1>/dev/console 2>/dev/console
-    local result=$?
+    return $?
 }
 
 retry() {
