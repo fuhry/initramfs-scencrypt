@@ -22,7 +22,8 @@ retry() {
     eval $command
     status=$?
     if [ "$status" -gt 0 ]; then
-        echo -n "$message (timeout is $timeout seconds)" >/dev/console
+        echo "$message" >/dev/console
+        echo -n "Timeout is $timeout seconds:" >/dev/console
         while true; do
             eval $command
             status=$?
@@ -30,7 +31,7 @@ retry() {
             [ $i -eq $timeout ] && break
             i=$(($i + 1))
             echo -n "." >/dev/console
-            sleep 1
+            read -t 1 -s 0</dev/console && break
         done
         echo "" >/dev/console
     fi
@@ -82,7 +83,7 @@ EOF
 
                 # test communication with card - this is also needed for decryption
                 # to work at all
-                retry 60 "Waiting for the smartcard to be inserted..." card_status
+                retry 60 "Waiting for the smartcard to be inserted (or press enter to falling back to passphrase)" card_status
 
                 # now attempt to decrypt
                 if decrypt_file "${key_file}" "${key_dest_path}"; then
