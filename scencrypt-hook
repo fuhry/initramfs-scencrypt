@@ -29,7 +29,7 @@ decrypt_file() {
         fi
         echo -n "" > "$status_file"
     done
-return $status
+    return $status
 }
 
 retry() {
