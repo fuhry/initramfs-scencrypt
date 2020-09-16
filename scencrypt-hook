@@ -1,16 +1,35 @@
 #!/usr/bin/ash
 
 card_status() {
-    /usr/bin/gpg --homedir "/etc/initcpio/gpg" --card-status --no-tty >/dev/null 2>&1
+    /usr/bin/gpg --homedir "/etc/initcpio/gpg" --card-status --no-tty \
+        >/dev/null 2>&1
     return $?
 }
 
 decrypt_file() {
     local input="$1"
     local output="${2:--}"
-    /usr/bin/gpg --homedir "/etc/initcpio/gpg" -o "${output}" --decrypt "${input}" \
-        0</dev/console 1>/dev/console 2>/dev/console
-    return $?
+    local status_file="/etc/initcpio/status"
+    local again=1
+    while [ $again -eq 1 ]; do
+        /usr/bin/gpg --homedir "/etc/initcpio/gpg" \
+            --status-file "$status_file" \
+            -o "${output}" --decrypt "${input}" \
+            0</dev/console 1>/dev/console 2>/dev/console
+        local status=$?
+        if [ "$status" -eq 0 ]; then
+            again=0
+        else
+            grep "^\[GNUPG:\] ERROR pkdecrypt_failed 100663383$" "$status_file" 
+            if [ $? -eq 0 ]; then
+                again=1
+            else
+                again=0
+            fi
+        fi
+        echo -n "" > "$status_file"
+    done
+    return $status
 }
 
 retry() {
@@ -42,6 +61,34 @@ run_hook() {
     modprobe -a -q dm-crypt >/dev/null 2>&1
     [ "${quiet}" = "y" ] && CSQUIET=">/dev/null"
 
+    # Get plain key file if specified, example: cryptkey=/dev/sda:2048:4096, cryptkey=rootfs:/keyfile.bin
+    ckeyfile=
+    if [ -n "$cryptkey" ]; then
+        IFS=: read ckdev ckarg1 ckarg2 <<EOF
+$cryptkey
+EOF
+
+        if [ "$ckdev" = "rootfs" ]; then
+            ckeyfile=$ckarg1
+        elif resolved=$(resolve_device "${ckdev}" ${rootdelay}); then
+            case ${ckarg1} in
+                *[!0-9]*)
+                    # Use a file on the device
+                    # ckarg1 is not numeric: ckarg1=filesystem, ckarg2=path
+                    mkdir /ckey
+                    mount -r -t "$ckarg1" "$resolved" /ckey
+                    dd if="/ckey/$ckarg2" of="$ckeyfile" >/dev/null 2>&1
+                    umount /ckey
+                    ;;
+                *)
+                    # Read raw data from the block device
+                    # ckarg1 is numeric: ckarg1=offset, ckarg2=length
+                    dd if="$resolved" of="$ckeyfile" bs=1 skip="$ckarg1" count="$ckarg2" >/dev/null 2>&1
+                    ;;
+            esac
+        fi
+    fi
+
     sed -re 's;#.*$;;g' -e '/^[ 	]*$/ d' -i /etc/crypttab
 
     IFS_BACKUP="$IFS"
@@ -58,6 +105,10 @@ EOF
         # handle case of no key file
         if [ "$key_file" = "-" -o "$key_file" = "none" ]; then
             key_file=
+        elif [ -r "${ckeyfile}" ]; then
+            # plain key file via cmdline cryptkey=
+            echo "Using plain key file specified in cryptkey="
+            key_file="${ckeyfile}"
         elif [ -c "${key_file}" ]; then
             # key file is a character device
             length=${keyarg1:-32}
@@ -71,8 +122,8 @@ EOF
             test -d /.gnupg || mkdir -p /.gnupg
             chmod -R go-rwx /.gnupg /etc/initcpio/gpg
 
-            # store the key at a known path. this allows the same key to be used
-            # for multiple disks and only have to decrypt once.
+            # store the key at a known path. this allows the same key to be 
+            # used for multiple disks and only have to decrypt once.
             key_dest_path=/etc/initcpio/gpg/key_${key_file//\//S}
 
             # only attempt decryption if the keypath doesn't exist.
@@ -81,9 +132,10 @@ EOF
             else
                 # we need to decrypt.
 
-                # test communication with card - this is also needed for decryption
-                # to work at all
-                retry 60 "Waiting for the smartcard to be inserted (or press enter to falling back to passphrase)" card_status
+                # test communication with card - this is also needed for 
+                # decryption to work at all
+                retry 60 "Waiting for the smartcard to be inserted
+(or press enter to falling back to passphrase)" card_status
 
                 # now attempt to decrypt
                 if decrypt_file "${key_file}" "${key_dest_path}"; then
@@ -121,14 +173,22 @@ EOF
             if cryptsetup isLuks "${device_path}"; then
                 # LUKS devices
 
-                # open device
+                # open device with key file
                 if [ -n "$key_file" ]; then
-                    if ! eval cryptsetup luksOpen --key-file="${key_file}" $luksoptions "${resolved}" "${mapped_name}"; then
-                        echo "WARNING: Failed to luksOpen crypto device ${device_path}"
+                    if ! eval cryptsetup luksOpen --key-file="${key_file}" \
+                        $luksoptions "${resolved}" "${mapped_name}"; then
+                        echo "WARNING: Failed to luksOpen crypto device" \
+                            ${device_path}
+                        key_file=
                     fi
-                else
-                    if ! eval cryptsetup luksOpen $luksoptions "${resolved}" "${mapped_name}"; then
-                        echo "WARNING: Failed to luksOpen crypto device ${device_path}"
+                fi
+
+                # open device with passphrase
+                if [ ! -n "$key_file" ]; then
+                    if ! eval cryptsetup luksOpen $luksoptions "${resolved}" \
+                        "${mapped_name}"; then
+                        echo "WARNING: Failed to luksOpen crypto device" \
+                            ${device_path}
                     fi
                 fi
             else
@@ -142,7 +202,8 @@ EOF
     done
     IFS="$IFS_BACKUP"
 
-    /usr/bin/gpg-connect-agent --homedir "/etc/initcpio/gpg" KILLAGENT /bye >/dev/null 2>&1
+    /usr/bin/gpg-connect-agent --homedir "/etc/initcpio/gpg" KILLAGENT /bye \
+        >/dev/null 2>&1
     rm -rf /etc/initcpio/gpg
 }
 

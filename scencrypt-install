@@ -32,10 +32,16 @@ build() {
     add_file "/usr/lib/udev/rules.d/13-dm-disk.rules"
     add_file "/usr/lib/udev/rules.d/95-dm-notify.rules"
     add_file "/usr/lib/initcpio/udev/11-dm-initramfs.rules" "/usr/lib/udev/rules.d/11-dm-initramfs.rules"
-    
+
+    # cryptsetup calls pthread_create(), which dlopen()s libgcc_s.so.1
+    add_binary "/usr/lib/libgcc_s.so.1"
+
     # add_file "/etc/crypttab" # file is added later line by line
 
     ln -s "pinentry-tty" "$BUILDROOT/usr/bin/pinentry"
+
+    # create a tmp dir
+    mkdir -p $BUILDROOT/tmp
 
     # Iterate over entries in /etc/crypttab looking for regular keyfiles
     sed -re 's;#.*$;;g' -e '/^[ \t]*$/ d' /etc/crypttab | awk '{print $3;}' | \
@@ -46,7 +52,7 @@ build() {
             extension="${f##*.}"
             if [[ "${extension}" =~ ^(gpg|pgp|asc)$ ]] ; then
                 # add file line to crypttab
-                fgrep -w $f /etc/crypttab >> "$BUILDROOT/etc/crypttab"
+                fgrep -w $f /etc/crypttab >> "$BUILDROOT/tmp/crypttab"
 
                 # Determine the keyid used to encrypt this keyfile
                 keyid=$(gpg -q --list-packets --list-only $f 2>&1 | egrep -o '(ID|keyid) [0-9A-F]{16}' | awk '{print $2;}' | tail -1)
@@ -56,19 +62,23 @@ build() {
                 # public key. Note that this means decryption will fail if you add only the
                 # public key to root's keyring.
                 if [ -n "$keyid" ]; then
-                    add_file "$f"
-                    keyfile=/tmp/$keyid.asc
+                    keyfile="$BUILDROOT/tmp/$keyid.asc"
                     gpg --homedir /root/.gnupg --export-options export-minimal --export-secret-keys -a 0x${keyid} 2>/dev/null > $keyfile
                     if ! egrep -q '.*' $keyfile; then
                         gpg --homedir /root/.gnupg --export-options export-minimal --export -a 0x${keyid} > $keyfile
                     fi
                     gpg --homedir "$BUILDROOT/etc/initcpio/gpg" --import $keyfile
-                    rm -f $keyfile
                 fi
             fi
+            add_file "$f"
         fi
     done
-    
+
+    # Remove duplicate lines (first sort and then use uniq)
+    sort "$BUILDROOT/tmp/crypttab" | uniq >  "$BUILDROOT/etc/crypttab"
+    # Remove tmp dir
+    rm -rf "$BUILDROOT/tmp"
+
     add_runscript
 }
 
