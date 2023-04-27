@@ -108,8 +108,8 @@ build() {
 
     # Remove duplicate lines (first sort and then use uniq)
     sort "$BUILDROOT/tmp/crypttab" | uniq >  "$BUILDROOT/etc/crypttab"
-    # Remove tmp dir
-    rm -rf "$BUILDROOT/tmp"
+    # Remove temporary crypttab
+    rm -f "$BUILDROOT/tmp/crypttab"
 
     add_runscript
 }
