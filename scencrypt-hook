@@ -58,6 +58,11 @@ retry() {
 }
 
 run_hook() {
+    INIT="`readlink -f /proc/1/exe`"
+    if test "${INIT##*/}" = "systemd" ; then
+        # we do not run under systemd
+        return 0
+    fi
     modprobe -a -q dm-crypt >/dev/null 2>&1
     [ "${quiet}" = "y" ] && CSQUIET=">/dev/null"
 
@@ -99,30 +104,38 @@ EOF
 $line
 EOF
 
+        # First, parse the key_spec field. The legacy behavior was to use the first
+        # argument in this column as the key path, and treat it as a PGP keyfile if
+        # the filename ends with ".gpg".
         IFS=: read key_file keyarg1 keyarg2 <<EOF
 $key_spec
 EOF
-        # handle case of no key file
-        if [ "$key_file" = "-" -o "$key_file" = "none" ]; then
-            key_file=
-        elif [ -r "${ckeyfile}" ]; then
-            # plain key file via cmdline cryptkey=
-            echo "Using plain key file specified in cryptkey="
-            key_file="${ckeyfile}"
-        elif [ -c "${key_file}" ]; then
-            # key file is a character device
-            length=${keyarg1:-32}
-            dd if=$key_file of=/keyfile.bin bs=1 count=$length >/dev/null 2>&1
-            key_file=/keyfile.bin
-        elif [ -b "${key_file}" ]; then
-            echo "ERROR: Key files on block devices are not supported yet."
-            key_file=
-        elif [ -r "${key_file}" -a "${key_file%.gpg}" != "${key_file}" ]; then
+
+        key_file_is_pgp=no
+        if test "${key_file%.gpg}" != "${key_file}"; then
+            key_file_is_pgp=yes
+        fi
+
+        # Now check the options column - the "new" way of specifying the key file is
+        # with the `pgp-keyfile=` option in the fourth column. This is for consistency
+        # with other FDE hooks.
+        IFS="$IFS_BACKUP"
+        for opt in ${options//,/ }; do
+            case "$opt" in
+                pgp-keyfile=*)
+                    key_file_is_pgp=yes
+                    key_file=${opt:12} ;;
+                *)
+                    : ;;
+            esac
+        done
+
+        if test -r "${key_file}" -a "$key_file_is_pgp" = "yes"; then
             # /.gnupg is where the scdaemon socket lives
             test -d /.gnupg || mkdir -p /.gnupg
             chmod -R go-rwx /.gnupg /etc/initcpio/gpg
 
-            # store the key at a known path. this allows the same key to be 
+            # store the key at a known path. this allows the same key to be
             # used for multiple disks and only have to decrypt once.
             key_dest_path=/etc/initcpio/gpg/key_${key_file//\//S}
 
@@ -132,7 +145,7 @@ EOF
             else
                 # we need to decrypt.
 
-                # test communication with card - this is also needed for 
+                # test communication with card - this is also needed for
                 # decryption to work at all
                 retry 60 "Waiting for the smartcard to be inserted
 (or press enter to falling back to passphrase)" card_status
@@ -148,6 +161,21 @@ EOF
                     key_file=
                 fi
             fi
+        elif [ "$key_file" = "-" -o "$key_file" = "none" ]; then
+            # handle case of no key file
+            key_file=
+        elif [ -r "${ckeyfile}" ]; then
+            # plain key file via cmdline cryptkey=
+            echo "Using plain key file specified in cryptkey="
+            key_file="${ckeyfile}"
+        elif [ -c "${key_file}" ]; then
+            # key file is a character device
+            length=${keyarg1:-32}
+            dd if=$key_file of=/keyfile.bin bs=1 count=$length >/dev/null 2>&1
+            key_file=/keyfile.bin
+        elif [ -b "${key_file}" ]; then
+            echo "ERROR: Key files on block devices are not supported yet."
+            key_file=
         elif [ -r "${key_file}" ]; then
             cp "${key_file}" /keyfile.bin
             key_file=/keyfile.bin
@@ -163,8 +191,10 @@ EOF
                 discard)
                     luksoptions="$luksoptions --allow-discards"
                     ;;
+                pgp-keyfile=*)
+                    : ;;
                 *)
-                    echo "Warning: ignoring unknown crypttab option: $option"
+                    echo "Warning: ignoring unknown crypttab option: $option" ;;
             esac
         done
 

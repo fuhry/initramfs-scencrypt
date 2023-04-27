@@ -1,0 +1,17 @@
+[Unit]
+Description=Install keyfile for LUKS device %i
+Before=systemd-cryptsetup@%i.service
+DefaultDependencies=no
+Conflicts=shutdown.target initrd-switch-root.target
+Before=sysinit.target cryptsetup-pre.target cryptsetup.target shutdown.target initrd-switch-root.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=-/bin/mkdir -p /run/cryptsetup-keys.d
+ExecStartPre=/bin/chmod 0700 /run/cryptsetup-keys.d
+ExecStart=/bin/cp /run/systemd/cryptsetup/${KEY_NAME}.key /run/cryptsetup-keys.d/%I.key
+ExecStop=/bin/rm -f /run/cryptsetup-keys.d/%I.key
+
+[Install]
+WantedBy=cryptsetup-pre.target
