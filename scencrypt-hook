@@ -148,7 +148,7 @@ EOF
                 # test communication with card - this is also needed for
                 # decryption to work at all
                 retry 60 "Waiting for the smartcard to be inserted
-(or press enter to falling back to passphrase)" card_status
+(or press enter to use passphrase instead)" card_status
 
                 # now attempt to decrypt
                 if decrypt_file "${key_file}" "${key_dest_path}"; then

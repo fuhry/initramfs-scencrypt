@@ -14,6 +14,7 @@ source=(scencrypt-hook
 		systemd-gpg-decrypt
 		systemd-cryptsetup-pgp-keyfile@.service
 		cryptsetup-gpg-dropin-generator
+		scencrypt-migrate
 		95-smartcard.rules
 		README.md)
 
@@ -45,6 +46,9 @@ package() {
 
 	mkdir -p "${pkgdir}/usr/share/doc/${pkgname}"
 	cp "${srcdir}/README.md" "${pkgdir}/usr/share/doc/${pkgname}/"
+	
+	mkdir -p "${pkgdir}/usr/bin"
+	install -oroot -m0755 "${srcdir}/scencrypt-migrate" "${pkgdir}/usr/bin/scencrypt-migrate"
 }
 
 sha256sums=('SKIP'
@@ -55,5 +59,6 @@ sha256sums=('SKIP'
          'SKIP'
          'SKIP'
          'SKIP'
+		 'SKIP'
          'SKIP'
          'SKIP')
