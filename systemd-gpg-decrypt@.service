@@ -1,0 +1,20 @@
+[Unit]
+Description=Decrypt keyfile %i with GnuPG
+After=systemd-initramfs-gpg-init.service dev-ykccid.device
+Wants=dev-ykccid.device
+Requires=systemd-initramfs-gpg-init.service
+
+DefaultDependencies=no
+Conflicts=shutdown.target initrd-switch-root.target
+Before=sysinit.target cryptsetup-pre.target cryptsetup.target shutdown.target initrd-switch-root.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=GNUPGHOME=/run/initramfs/gnupg
+ExecStartPre=-/usr/bin/gpg --card-status
+ExecStart=/usr/lib/systemd/systemd-gpg-decrypt "$INPUT_FILE" "%i"
+ExecStop=/bin/rm -f /run/systemd/cryptsetup/%i.key
+
+[Install]
+WantedBy=cryptsetup-pre.target

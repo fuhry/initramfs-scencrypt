@@ -1,0 +1,24 @@
+#!/bin/sh
+
+die() {
+	echo "$@" >&2
+	exit 1
+}
+
+if [ -z "$PATH" ]; then
+	PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+fi
+
+test -n "$GNUPGHOME" || die "GNUPGHOME is not set"
+test "${GNUPGHOME:0:5}" = "/run/" || die "GNUPGHOME is not under /run"
+
+test -d "$GNUPGHOME" || mkdir -p "$GNUPGHOME"
+chmod 0700 "$GNUPGHOME"
+
+gpg-connect-agent /bye
+for f in /etc/initcpio/gpg/public-keys.d/*.asc /etc/initcpio/gpg/public-keys.d/*.pub; do
+	if [ -r "$f" ]; then
+		gpg --import --batch --yes "$f"
+	fi
+done
+

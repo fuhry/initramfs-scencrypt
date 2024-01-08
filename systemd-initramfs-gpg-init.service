@@ -1,0 +1,17 @@
+[Unit]
+Description=Initialize GNUPGHOME in the initramfs
+DefaultDependencies=no
+Conflicts=shutdown.target initrd-switch-root.target
+Before=sysinit.target cryptsetup-pre.target cryptsetup.target shutdown.target initrd-switch-root.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=GNUPGHOME=/run/initramfs/gnupg
+ExecStart=/usr/lib/systemd/systemd-initramfs-gpg-init
+ExecStop=/usr/bin/gpgconf --kill all
+ExecStop=/bin/rm -rf $GNUPGHOME
+
+[Install]
+WantedBy=cryptsetup-pre.target
+

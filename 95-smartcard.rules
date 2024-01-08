@@ -1,0 +1,2 @@
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1050", ENV{ID_SMARTCARD_READER}=="?*", SYMLINK+="ykccid"
+

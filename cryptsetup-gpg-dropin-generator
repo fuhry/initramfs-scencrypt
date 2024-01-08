@@ -1,0 +1,84 @@
+#!/bin/sh
+
+set -x
+
+NORMAL_GENERATOR_DIR=${1:-/run/systemd/generator}
+EARLY_GENERATOR_DIR=$2
+LATE_GENERATOR_DIR=$3
+SYSTEM_GENERATOR_DIR="${NORMAL_GENERATOR_DIR}"
+UNIT_SOURCE_DIR=/usr/lib/systemd/system
+
+if [ -z "$PATH" ]; then
+	export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+fi
+
+condlink() {
+	if test -h "$2" ; then
+		rm -f "$2"
+	fi
+	if test -e "$2"; then
+		echo "cannot create symbolic link $2: file exists" >&2
+		return 1
+	fi
+	ln -s "$1" "$2"
+}
+
+generate_dropin() {
+	local mapped_name="$1"
+	local escaped_name="`systemd-escape "$mapped_name"`"
+	local cryptsetup_unit="systemd-cryptsetup@${escaped_name}.service"
+	local password_file="$2"
+	local password_escaped="`systemd-escape --path "${password_file}"`"
+	local password_unit="systemd-gpg-decrypt@${password_escaped}.service"
+	local keyfile_unit="systemd-cryptsetup-pgp-keyfile@${escaped_name}.service"
+
+	mkdir -p "$SYSTEM_GENERATOR_DIR/${password_unit}.d"
+	cat <<EOF > "$SYSTEM_GENERATOR_DIR/${password_unit}.d/10-path.conf"
+[Service]
+Environment=INPUT_FILE=${password_file}
+
+EOF
+
+	mkdir -p "$SYSTEM_GENERATOR_DIR/${keyfile_unit}.d"
+	cat <<EOF > "$SYSTEM_GENERATOR_DIR/${keyfile_unit}.d/10-parent.conf"
+[Unit]
+After=${password_unit}
+
+[Service]
+Environment=KEY_NAME=${password_escaped}
+EOF
+
+	mkdir -p "$SYSTEM_GENERATOR_DIR/${password_unit}.requires"
+	condlink "${UNIT_SOURCE_DIR}/systemd-initramfs-gpg-init.service" "$SYSTEM_GENERATOR_DIR/${password_unit}.requires/systemd-initramfs-gpg-init.service"
+
+	mkdir -p "$SYSTEM_GENERATOR_DIR/${keyfile_unit}.requires"
+	condlink "${UNIT_SOURCE_DIR}/systemd-gpg-decrypt@.service" "$SYSTEM_GENERATOR_DIR/${keyfile_unit}.requires/${password_unit}"
+
+	mkdir -p "$SYSTEM_GENERATOR_DIR/${cryptsetup_unit}.wants"
+	condlink "${UNIT_SOURCE_DIR}/systemd-cryptsetup-pgp-keyfile@.service" "$SYSTEM_GENERATOR_DIR/${cryptsetup_unit}.wants/${keyfile_unit}"
+	
+	mkdir -p "$SYSTEM_GENERATOR_DIR/cryptsetup-pre.target.wants"
+	condlink "${UNIT_SOURCE_DIR}/systemd-cryptsetup-pgp-keyfile@.service" "$SYSTEM_GENERATOR_DIR/cryptsetup-pre.target.wants/${keyfile_unit}"
+	condlink "${UNIT_SOURCE_DIR}/systemd-initramfs-gpg-init.service" "$SYSTEM_GENERATOR_DIR/cryptsetup-pre.target.wants/systemd-initramfs-gpg-init.service"
+}
+
+if test "$SYSTEMD_IN_INITRD" != "1"; then
+	exit 0
+fi
+
+while read line; do
+	line="${line%#*}"
+	IFS=$' \t' read mapped_name device keyfile options <<EOF
+$line
+EOF
+	for opt in ${options//,/ }; do
+		case "$opt" in
+			pgp-keyfile=*)
+				generate_dropin "$mapped_name" "${opt:12}"
+				;;
+			*)
+				: ;;
+		esac
+	done
+done < /etc/crypttab
+

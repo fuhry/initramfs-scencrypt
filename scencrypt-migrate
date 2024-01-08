@@ -1,0 +1,99 @@
+#!/bin/bash
+
+set -eu
+
+declare -r KEYDIR="/etc/initcpio/gpg/public-keys.d"
+if [ -r "/etc/crypttab.initramfs" ]; then
+	declare -r CRYPTTAB="/etc/crypttab.initramfs"
+elif [ -f "/etc/crypttab" ]; then
+	declare -r CRYPTTAB="/etc/crypttab"
+else
+	echo "ERROR: Cannot find /etc/crypttab or /etc/crypttab.initramfs" >&2
+	exit 1
+fi
+
+echo -n > "$CRYPTTAB.new"
+crypttab_changed=no
+while read line; do
+	IFS=" 	" read cryptname dev keyfile opts <<< "$line"
+	if [ "${line:0:1}" = "#" ]; then
+		echo "$line" >> "$CRYPTTAB.new"
+		continue
+	fi
+
+	if [ -z "$cryptname" -o -z "$dev" ]; then
+		echo "$line" >> "$CRYPTTAB.new"
+		continue
+	fi
+
+	if [ "$keyfile" = "none" ]; then
+		echo "$line" >> "$CRYPTTAB.new"
+		continue
+	fi
+
+	keyid="$(gpg --list-packets --batch --pinentry-mode cancel "${keyfile}" 2>/dev/null | grep -Eo 'keyid [0-9A-F]{16}' || true)"
+	if [ -z "${keyid}" ]; then
+		echo "$line" >> "$CRYPTTAB.new"
+		continue
+	fi
+
+	if [ -n "$opts" ]; then
+		opts+=","
+	fi
+	opts+="pgp-keyfile=${keyfile}"
+	echo -e "${cryptname}\t${dev}\tnone\t${opts}" >> "$CRYPTTAB.new"
+	crypttab_changed=yes
+done < "$CRYPTTAB"
+
+if [ "$crypttab_changed" = "yes" ]; then
+	echo "Automaticaly rewrote your ${CRYPTTAB} file:"
+	diff -u "${CRYPTTAB}" "${CRYPTTAB}.new" || true
+
+	mv "${CRYPTTAB}" "${CRYPTTAB}.old"
+	mv "${CRYPTTAB}.new" "${CRYPTTAB}"
+
+	echo "The old contents are preserved in /etc/crypttab.old."
+fi
+
+keys_exported=no
+while read line; do
+	if [ "${line:0:1}" = "#" ]; then
+		continue
+	fi
+
+	IFS=" 	" read cryptname dev keyfile opts <<< "$line"
+
+	if [ -z "$cryptname" -o -z "$dev" ]; then
+		continue
+	fi
+
+	# echo "cryptname: $cryptname"
+	# echo "device:    $dev"
+	# echo "keyfile:   $keyfile"
+	# echo "opts:      $opts"
+
+	opts=(${opts//,/ })
+	for opt in "${opts[@]}"; do
+		case "$opt" in
+			pgp-keyfile=*)
+				keyfile="${opt:12}"
+				keyid="$(gpg --list-packets --batch --pinentry-mode cancel "${keyfile}" 2>/dev/null | grep -Eo 'keyid [0-9A-F]{16}' || true)"
+				keyid="0x${keyid:6}"
+
+				if [ ! -r "${KEYDIR}/${keyid}.asc" ]; then
+					echo "Exporting public key ${keyid} to ${KEYDIR}/${keyid}.asc"
+					gpg --export -a "${keyid}" > "${KEYDIR}/${keyid}.asc"
+					keys_exported=yes
+				fi
+				;;
+			*) ;;
+		esac
+	done
+
+	# echo "--"
+done < "${CRYPTTAB}"
+
+if [ "$crypttab_changed" = "yes" -o "$keys_exported" = "yes" ]; then
+	echo "Your system was modified. Rebuilding initramfs."
+	mkinitcpio -P
+fi

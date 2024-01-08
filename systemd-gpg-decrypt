@@ -1,0 +1,34 @@
+#!/bin/sh
+
+INPUT="$1"
+INSTANCE="$2"
+
+if [ -z "$INPUT" -o -z "$INSTANCE" ]; then
+	echo "Usage: $0 input_file instance_name" >&2
+	exit 1
+fi
+
+gpgout="`gpg --list-packets --batch --pinentry-mode cancel "$INPUT" 2>&1 | head -2`"
+if [ $? -gt 0 ]; then
+	echo "Input file $INPUT doesn't contain valid PGP encrypted data." >&2
+	exit 1
+fi
+
+line1="`echo "$gpgout" | head -1`"
+line2="`echo "$gpgout" | tail -1`"
+
+line1="${line1#gpg: encrypted with }"
+line2="${line2#*\"}"
+line2="${line2%\"}"
+
+password_or_pin="`/usr/bin/systemd-ask-password "Password or Smartcard PIN for $line1 ($line2)"`"
+if [ -z "$password_or_pin" ]; then
+	echo "ERROR: No password or PIN specified." >&2
+	exit 1
+fi
+
+umask 0077
+test -d "/run/systemd/cryptsetup" || mkdir -p "/run/systemd/cryptsetup"
+
+echo "$password_or_pin" | gpg --decrypt --quiet --passphrase-fd 0 -o "/run/systemd/cryptsetup/${INSTANCE}.key" --batch --yes --pinentry-mode loopback "$INPUT"
+

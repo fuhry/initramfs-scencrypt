@@ -3,8 +3,19 @@ post_install() {
 	echo " >> Make sure to add your encrypted disks to /etc/crypttab. There is"
 	echo " >> no support for cryptdevice=... on the kernel command line."
 	echo ""
-	echo " >> Key file path must end in .gpg and the private key must be"
-	echo " >> accessible by root."
+	echo -e " \e[0;1m>> \e[31;1mTHIS VERSION BREAKS BACKWARD COMPATIBILITY!"
+	echo -e " \e[0;1m>> Run the \e[36;1mscencrypt-migrate\e[0;1m command to automatically "
+	echo -e " \e[0;1m>> update your /etc/crypttab and key storage.\e[0m"
+	echo ""
+	echo " >> For more information, read /usr/share/doc/initramfs-scencrypt/README.md"
+}
+
+post_upgrade() {
+	echo " >> initramfs-scencrypt - READ ME!"
+	echo ""
+	echo -e " \e[0;1m>> \e[31;1mTHIS VERSION BREAKS BACKWARD COMPATIBILITY!"
+	echo -e " \e[0;1m>> Run the \e[36;1mscencrypt-migrate\e[0;1m command to automatically "
+	echo -e " \e[0;1m>> update your /etc/crypttab and key storage.\e[0m"
 	echo ""
 	echo " >> For more information, read /usr/share/doc/initramfs-scencrypt/README.md"
 }

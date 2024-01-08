@@ -25,17 +25,33 @@ Use this hook at your own risk. It's highly recommended to have a backup key som
 1. `sudo cryptsetup luksAddKey /dev/your_luks_device /dev/shm/disk.bin`
 1. `shred -u -n1 /dev/shm/disk.bin` to delete the decrypted `disk.bin` file from memory.
 1. Edit `/etc/crypttab` to include your encrypted device. The line will look somewhat like:
-   `arch_crypt        /dev/your_luks_device               /home/you/disk.bin.gpg         discard`
-1. Edit `/etc/mkinitcpio.conf` and replace the `encrypt` hook with `scencrypt`. Do not leave both `encrypt` and `scencrypt` enabled.
-1. Make sure `root` has a GPG keychain with your public key (e.g. `gpg --export -a 0x13C7C0BA66FB8DC7 > ~/pub.gpg`, `sudo su`, `gpg --import /home/<user>/pub.gpg`
+   `arch_crypt        /dev/your_luks_device               none         pgp-keyfile=/etc/disk-keys/disk.bin.gpg,discard`
+1. Edit `/etc/mkinitcpio.conf` and add the `scencrypt` hook.
+   If you are using a traditional initramfs, **do not** leave both `encrypt` and `scencrypt` enabled.
+   If you are using systemd in your rootfs, you **must** leave sd-encrypt enabled.
+1. Export public keys (when using a smartcard) or private keys (when using software decryption) into a `.asc` file in `/etc/initcpio/gpg/public-keys.d`.
 1. Run `mkinitcpio -p linux`. If there are no errors, reboot with your smart card plugged in to find out if it works.
-1. (Optional) `sudo cryptSetup luksRemoveKey /dev/your_luks_device` and type the passphrase you added when you were installing Arch. This will remove the old passphrase so that only your GPG-encrypted key file can unseal the disk.
+1. (Optional) Remove previously-used passphrases so that only your GPG-encrypted key file can unseal the disk. Optionally, enroll a recovery key that is saved offline.
+
+# Migration from v1.x
+
+To facilitate compatibility with `systemd-cryptsetup`, version 2.x requires the PGP key file to be passed in the fourth column as `pgp-keyfile=...` rather than the third column in `crypttab`.
+
+A script called `scencrypt-migrate` is included which will automatically rewrite your crypttab (and save a backup in `/etc/crypttab.old`, of course). While the non-systemd version of the hook attempts to support the old format, this will not remain supported and may be subject to cleanup in the future.
+
+The `scencrypt-migrate` script will also attempt to export your PGP keys to the new storage location. Be advised that it only attempts to export public keys, so if your private key is normally bundled into the initramfs, you'll need to export this manually.
+
+Once your `crypttab` has been migrated, you can switch to a systemd-based initramfs by replacing the `udev` hook with `systemd`, and adding the `sd-encrypt` hook after `scencrypt`.
 
 # Technical details
 
 The hook works by copying your encrypted key file to the initramfs, decrypting it in memory, passing it to LUKS to unseal the disk, and then using `shred` to overwrite it in memory.
 
-Behind the scenes, `gpg` starts `scdaemon`, which talks to `pcscd` and `pinentry-tty` to get your PIN and pass it to the card along with the payload for decryption. The private key itself is held securely on the smartcard - it cannot be released even with the PIN on hand. But the decryption is quick because the payload is small. Once the disk is mounted, the smartcard can safely be removed from the system - the result of the decryption is merely a "user key" that LUKS uses to decrypt the volume's master key. There is an excellent [white paper](http://clemens.endorphin.org/nmihde/nmihde-A4-ds.pdf) written by one of the original LUKS authors detailing LUKS's extensive anti-forensic hardening.
+Behind the scenes, `gpg` starts `scdaemon`, which talks to `pcscd` and `pinentry-tty` to get your PIN and pass it to the card along with the payload for decryption.
+
+For installations using a systemd-based initramfs, the process is a little more complicated, because the PIN comes in through `systemd-ask-password` and a series of units and dependencies is used to allow the same keyfile to be used for multiple disks while only asking for the PIN once.
+
+The private key itself is held securely on the smartcard - it cannot be released even with the PIN on hand. But the decryption is quick because the payload is small. Once the disk is mounted, the smartcard can safely be removed from the system - the result of the decryption is merely a "key encryption key" (KEK) that LUKS uses to decrypt the real data encryption key (DEK). There is an excellent [white paper](http://clemens.endorphin.org/nmihde/nmihde-A4-ds.pdf) written by one of the original LUKS authors detailing LUKS's extensive anti-forensic hardening.
 
 The hook will prefer `cryptkey=` kernel cmdline argument if present. It uses the same options as the stock `encrypt` hook, refer to the `cryptsetup` package for details. This allows you to use `kexec` without having to re-insert your YubiKey. For this to work you can kexec-load a `initrd` which contains the plain key file. For security reasons that initrd shall only reside in RAM. Have a look at [kexec-example.sh](kexec-example.sh).
 
